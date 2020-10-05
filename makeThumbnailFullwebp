@@ -1,0 +1,232 @@
+if (!function_exists('makeThumbnailFull')) {
+		/**
+		 * @param $path
+		 * @param $thumbs_path
+		 * @param $width
+		 * @param $height
+		 * @param bool $crop
+		 * @param int $cropside
+		 * @param bool $isLogo
+		 * @param string $quality
+		 * @return array|string
+		 * @throws Exception
+		 */
+		function makeThumbnailFull(
+			$path,
+			$thumbs_path,
+			$width,
+			$height,
+			$crop = true,
+			$cropside = 5,
+			$isLogo = false,
+			$quality = 'default'
+		) {
+			if ($quality === 'default') {
+				$quality = IMAGE_COMPRESSION_LEVEL;
+			}
+			$isSharpen = true;
+
+			$no_image_file = mainConfiguration::getInstance()->includeParam('no-image-holder');
+
+			$image = new umiImageFile($path);
+			$file_name = $image->getFileName();
+			$file_ext = mb_strtolower($image->getExt());
+            
+            //Никита объявление формата webp
+            //$file_ext_to_webp = 'webp';
+			$file_ext = ($file_ext == 'bmp' ? 'jpg' : $file_ext);
+            //$file_ext = ($file_ext == 'bmp' ? 'jpg' : $file_ext_to_webp);
+            
+            //Никита добавил ,'webp' как разрешенное расширение
+			$allowedExts = ['gif', 'jpeg', 'jpg', 'png', 'bmp','webp'];
+
+			if (!in_array($file_ext, $allowedExts)) {
+				return '';
+			}
+
+			$file_name = mb_substr($file_name, 0, mb_strlen($file_name) - (mb_strlen($file_ext) + 1));
+
+			$thumbPath = sha1($image->getDirName());
+
+			if (!is_dir($thumbs_path . $thumbPath)) {
+				mkdir($thumbs_path . $thumbPath, 0755, true);
+			}
+
+			$file_name_new = $file_name . '_' . $width . '_' . $height . '_' . $image->getExt(true) . '_' . $cropside .
+				'_' . $quality . '.' . $file_ext;
+
+			$path_new = $thumbs_path . $thumbPath . '/' . $file_name_new;
+
+			if (!file_exists($path_new) || filemtime($path_new) < filemtime($path)) {
+				if (file_exists($path_new)) {
+					unlink($path_new);
+				}
+
+				$width_src = $image->getWidth();
+				$height_src = $image->getHeight();
+
+				if (!checkEnoughMemoryForThumbnail($width_src, $height_src)) {
+					/** @var $tooBigImageFilePath - путь до картинки с сообщением, что размер
+					 * загруженного изображения слишком большой */
+					$tooBigImageFilePath = mainConfiguration::getInstance()->includeParam('too-big-image-holder');
+
+					$tooBigImageFile = new umiImageFile($tooBigImageFilePath);
+					return [
+						'src' => $tooBigImageFile->getFilePath(true),
+						'width' => $tooBigImageFile->getWidth(),
+						'heigth' => $tooBigImageFile->getHeight(),
+					];
+				}
+
+				if (!($width_src && $height_src)) {
+					$path = $no_image_file;
+					$image = new umiImageFile($path);
+					$file_name = $image->getFileName();
+					$file_ext = mb_strtolower($image->getExt());
+					$file_ext = ($file_ext == 'bmp' ? 'jpg' : $file_ext);
+					$file_name = mb_substr($file_name, 0, mb_strlen($file_name) - (mb_strlen($file_ext) + 1));
+					$thumbPath = sha1($image->getDirName());
+					if (!is_dir($thumbs_path . $thumbPath)) {
+						mkdir($thumbs_path . $thumbPath, 0755, true);
+					}
+					$file_name_new =
+						$file_name . '_' . $width . '_' . $height . '_' . $cropside . '_' . $quality . '.' . $file_ext;
+					$path_new = $thumbs_path . $thumbPath . '/' . $file_name_new;
+					if (file_exists($path_new)) {
+						unlink($path_new);
+					}
+					$width_src = $image->getWidth();
+					$height_src = $image->getHeight();
+				}
+
+				if (!($width_src && $height_src)) {
+					return '';
+				}
+
+				$real_height = $height;
+				$real_width = $width;
+
+				switch (true) {
+					case ($height == 'auto' && $width == 'auto'): {
+						$real_width = (int) $width_src;
+						$real_height = (int) $height_src;
+						break;
+					}
+					case ($height == 'auto'): {
+						$real_height = (int) round($height_src * ($width / $width_src));
+						$real_width = (int) $width;
+						break;
+					}
+					case ($width == 'auto'): {
+						$real_width = (int) round($width_src * ($height / $height_src));
+						$real_height = (int) $height;
+						break;
+					}
+					default:
+						// No default
+				}
+
+				$width = $real_width;
+				$height = $real_height;
+
+				$offset_h = 0;
+				$offset_w = 0;
+
+				if (!(int) $width || !(int) $height) {
+					$crop = false;
+				}
+
+				if ($crop) {
+					$width_ratio = $width_src / $width;
+					$height_ratio = $height_src / $height;
+
+					if ($width_ratio > $height_ratio) {
+						$offset_w = round(($width_src - $width * $height_ratio) / 2);
+						$width_src = round($width * $height_ratio);
+					} elseif ($width_ratio < $height_ratio) {
+						$offset_h = round(($height_src - $height * $width_ratio) / 2);
+						$height_src = round($height * $width_ratio);
+					}
+
+					if ($cropside) {
+						//defore all it was cropside work like as - 5
+						//123
+						//456
+						//789
+						switch ($cropside):
+							case 1:
+								$offset_w = 0;
+								$offset_h = 0;
+								break;
+							case 2:
+								$offset_h = 0;
+								break;
+							case 3:
+								$offset_w += $offset_w;
+								$offset_h = 0;
+								break;
+							case 4:
+								$offset_w = 0;
+								break;
+							case 5:
+								break;
+							case 6:
+								$offset_w += $offset_w;
+								break;
+							case 7:
+								$offset_w = 0;
+								$offset_h += $offset_h;
+								break;
+							case 8:
+								$offset_h += $offset_h;
+								break;
+							case 9:
+								$offset_w += $offset_w;
+								$offset_h += $offset_h;
+								break;
+						endswitch;
+					}
+				}
+
+				try {
+					$pr = imageUtils::getImageProcessor();
+					$pr->cropThumbnail(
+						$path,
+						$path_new,
+						$width,
+						$height,
+						$width_src,
+						$height_src,
+						$offset_w,
+						$offset_h,
+						$isSharpen,
+						$quality
+					);
+				} catch (coreException $exception) {
+					umiExceptionHandler::report($exception);
+					return '';
+				}
+
+				if ($isLogo) {
+					umiImageFile::addWatermark($path_new);
+				}
+			}
+
+			$value = new umiImageFile($path_new);
+			$info = imageUtils::getGDProcessor()->info($path_new);
+			$arr = [];
+			$arr['size'] = $value->getSize();
+			$arr['filename'] = $value->getFileName();
+			$arr['filepath'] = $value->getFilePath();
+			$arr['src'] = $value->getFilePath(true);
+			$arr['ext'] = $value->getExt();
+			$arr['width'] = $info['width'];
+			$arr['height'] = $info['height'];
+
+			if (Service::Request()->isAdmin()) {
+				$arr['src'] = str_replace('&', '&amp;', $arr['src']);
+			}
+
+			return $arr;
+		}
+	}
