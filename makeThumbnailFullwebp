@@ -1,3 +1,10 @@
+/** реализация в каком-нибудь index.html **/
+
+<?=$this->macros('system', 'makeThumbnailFull', array('path' => '.' . '/images/cms/thumbs/958f3e450d9e3edf89c1235f18dd8cc637ae4830/img_8221_500_889_jpg_5_80.jpg', 'width' => 150, 'height' => 150))?>
+
+/** ! реализация в каком-нибудь index.html **/
+
+/** system/bootstrap/functions.php **/
 if (!function_exists('makeThumbnailFull')) {
 		/**
 		 * @param $path
@@ -230,3 +237,5 @@ if (!function_exists('makeThumbnailFull')) {
 			return $arr;
 		}
 	}
+
+/** ! system/bootstrap/functions.php **/
